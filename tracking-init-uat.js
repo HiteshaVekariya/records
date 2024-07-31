@@ -248,6 +248,26 @@
   //   // const clone = JSON.parse(JSON.stringify(clickedObject));
   //   clickedObject.pageNavigation.push({ type: "TAB_CHANGE", tempTime: Date.now() - timeValue, url: currentURL, dateFormat: new Date() });
   // });
+window.addEventListener("popstate", function (event) {
+  handleNavigation();
+});
+
+window.addEventListener("beforeunload", function (event) {
+  handleNavigation();
+});
+
+function handleNavigation() {
+  let timeValue = sessionStorage.getItem("sessionStartTime");
+  if (timeValue) {
+    let currentURL = window.location.href;
+    clickedObject.pageNavigation.push({
+      type: "TAB_CHANGE",
+      tempTime: Date.now() - timeValue,
+      url: currentURL,
+      dateFormat: new Date(),
+    });
+  }
+}
 
   // window.addEventListener("visibilitychange", async () => {
 
