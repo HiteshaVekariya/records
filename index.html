@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <!-- <script src="https://p-visitor-tracking.s3.ap-south-1.amazonaws.com/tracking-uat.js"
+        id="traek_script&XMAnsoMhM1HpkEzHMjYrWsMDAIZWt3pS"></script> -->
+    <!-- <script src="https://p-visitor-tracking.s3.ap-south-1.amazonaws.com/tracking-uat.js"
+        id="traek_script&HfKvMABaN5SB3BN9ku43mJijFK4SDz2g"></script> -->
+
+    <script src="tracking-init-uat.js" id="traek_script&rBHf26xx9qIu96oDhXMK2vO9Tpnqmd0O"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* justify-content: flex-end; */
+            /* Align content to the right edge */
+            /* align-items: flex-start; */
+            /* Align content to the top */
+
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100vh;
+            height: 100vw;
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-weight: bold;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 3px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+
+        .forgot-password {
+            text-align: center;
+            margin-top: 10px;
+        }
+    </style>
+    <script> (function (w, d, s, p, t) { w.gr = w.gr || function () { w.gr.q = w.gr.q || []; w.gr.q.push(arguments); }; p = d.getElementsByTagName(s)[0]; t = d.createElement(s); t.async = true; t.src = "https://app.getreditus.com/gr.js?_ce=60"; p.parentNode.insertBefore(t, p); })(window, document, "script"); gr("track", "pageview"); </script>
+</head>
+
+<body>
+    <div class="container">
+
+
+        <h1>HTML Form with JavaScript</h1>
+
+        <form id="myForm">
+            <label for="firstName">First Name:</label>
+            <input type="text" id="firstName" name="firstName" required>
+            <br>
+
+            <label for="lastName">Last Name:</label>
+            <input type="text" id="lastName" name="lastName" required>
+            <br>
+
+            <label for="email">Email Address:</label>
+            <input type="email" id="email" name="email" required>
+            <br>
+
+            <button type="submit">Submit</button>
+        </form>
+
+        <script>
+            const form = document.getElementById('myForm');
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+
+                const firstName = document.getElementById('firstName').value;
+                const lastName = document.getElementById('lastName').value;
+                const email = document.getElementById('email').value;
+
+                const message = `
+                    First Name: ${firstName}
+                    Last Name: ${lastName}
+                    Email: ${email}
+                `;
+
+                alert(message);
+            });
+        </script>
+        <!-- Signup Page -->
+        <div id="signup" class="form-group">
+            <h2>Sign Up</h2>
+            <label for="signupUsername">Username</label>
+            <input type="text" id="signupUsername" placeholder="Enter your username">
+
+            <label for="signupPassword">Password</label>
+            <input type="password" id="signupPassword" placeholder="Enter your password">
+            gr('track', 'conversion', { email: "email@example.com" });
+            <button onclick="fetchChuckNorrisJoke()">Sign Up</button>
+        </div>
+
+        <!-- Sign In Page -->
+        <div id="signin" class="form-group">
+            <h2>Sign In</h2>
+            <label for="signinUsername">Username</label>
+            <input type="email" id="signinUsername" placeholder="Enter your username">
+
+            <label for="signinPassword">Password</label>
+            <input type="password" id="signinPassword" placeholder="Enter your password">
+
+            <button onclick="fetchChuckNorrisJoke()">Sign In</button>
+            <div class="forgot-password">
+                <a href="#forgot">Forgot Password?</a>
+            </div>
+        </div>
+
+        <!-- Forgot Password Page -->
+        <div id="forgot" class="form-group" style="display: none;">
+            <h2>Forgot Password</h2>
+            <p>Enter your email address to reset your password.</p>
+
+            <label for="forgotEmail">Email</label>
+            <input type="text" id="forgotEmail" placeholder="Enter your email address">
+
+            <button>Reset Password</button>
+        </div>
+    </div>
+
+    <div><a href="https://uat-app.traek.io/signup/?gr_pk=NpRm&gr_uid=rNlW" target="_blank">click Me</a></div>
+
+    <script>
+        function fetchChuckNorrisJoke() {
+            fetch("https://api.chucknorris.io/jokes/pawan")
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Handle the API response data
+                    gr('track', 'conversion', {
+                        email: "suyogt@thirdrocktechkno.com"
+                    });
+                    console.log("Chuck Norris Joke:", data.value);
+                })
+                .catch(error => {
+                    // Handle any errors that occurred during the fetch
+                    console.error("Error fetching Chuck Norris joke:", error);
+                });
+        }
+
+        const signupPage = document.getElementById("signup");
+        const signinPage = document.getElementById("signin");
+        const forgotPage = document.getElementById("forgot");
+
+        function showPage(pageId) {
+            signupPage.style.display = "none";
+            signinPage.style.display = "none";
+            forgotPage.style.display = "none";
+
+            document.getElementById(pageId).style.display = "block";
+        }
+
+        const forgotLink = document.querySelector(".forgot-password a");
+        forgotLink.addEventListener("click", () => showPage("forgot"));
+    </script>
+</body>
+
+</html>
