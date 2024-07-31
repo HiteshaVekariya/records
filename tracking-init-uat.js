@@ -1591,6 +1591,6 @@ const apiKey = document
 
 const traek = new Traek.TraekAnalytics(
   apiKey,
-  "http://localhost:4200",
+  "https://uat-app.traek.io",
   "/cdn"
 ).trackUserData();
