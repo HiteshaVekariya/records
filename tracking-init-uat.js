@@ -74,6 +74,7 @@
     this.ip = sessionStorage.getItem("ip");
     this.firebaseAccessToken = null;
     this.visitedTime = new Date();
+    this.duration = 0;
     this.callApi = true;
     this.propertyId = null;
     this.websiteUrl = null;
@@ -90,137 +91,280 @@
     this.newVisit = true;
     this.allowSessionRecord = true;
     this.isSessionAPIInProgress = false;
+    this.lastClick = 0;
+    this.secondLastClick = 0;
+    this.target = null;
+    this.clickedObject = null;
+    this.currentClick = null;
+    this.totalClick = null;
+    this.rageclickfind = null;
+    this.screenResolution = `${window.screen.width}x${window.screen.height} px`;
   };
 
   const SAVE_RECORDING_INTERVAL_TIME = 15 * 1000; // 15 second
+  let sessionStartTime;
+  let errorMessageObj = null;
+
+  let clickedObject = {
+    input: [],
+    button: [],
+    elementClick: [],
+    formSubmit: [],
+    windowResize: [],
+    deadClick: [],
+    linkClick: [],
+    errorClick: [],
+    pageNavigation: [],
+    rageClick: []
+  };
+
+  let currentEvent = null;
+
+
+  // custom attribute
+  ((window) => {
+    if (typeof window.ry !== 'undefined') {
+      return;
+    }
+
+    const ry = {
+      data: [],
+
+      isValidType: (value) => {
+        return (
+          typeof value === 'number' ||
+          typeof value === 'string' ||
+          typeof value === 'boolean' ||
+          value instanceof Date
+        );
+      },
+
+      add: (obj) => {
+        const isValidObject = Object.entries(obj).every(([key, value]) => {
+          return ry.isValidType(value);
+        });
+
+
+        if (isValidObject) {
+          const currentTime = new Date();
+          obj.time = currentTime;
+          ry.data.push(obj);
+          ry.saveData();
+          console.log('Updated data:', ry.data);
+        } else {
+          console.error('Invalid object provided. Only number, string, date, and boolean values are allowed.');
+        }
+      },
+
+      saveData: () => {
+        sessionStorage.setItem('ryData', JSON.stringify(ry.data));
+      },
+      clearData: () => {
+        ry.data = [];
+        ry.saveData();
+        console.log('Data cleared');
+      },
+    };
+
+    window.ry = (action, obj) => {
+      if (action === 'associate') {
+        ry.add(obj);
+      } else if (action === 'clear') {
+        ry.clearData();
+      } else {
+        console.error('Invalid action specified');
+      }
+    };
+
+    window.addEventListener('beforeunload', () => {
+      ry.saveData();
+    });
+
+  })(window);
+
+
+  document.addEventListener(
+    "click",
+    (event) => {
+      let timeValue = sessionStorage.getItem("sessionStartTime")
+      const clickedElement = event.target;
+      const elementType = clickedElement.tagName.toLowerCase();
+      const elementName = clickedElement.nodeName;
+      const elementClass = clickedElement.className;
+      const elementId = clickedElement.id;
+      const url = window.location.href;
+      const onClickDetails = clickedElement.onclick ? clickedElement.onclick.toString() : "No onclick attribute";
+
+      let clickDetails = { elementType, elementName, elementClass, elementId, url, onClickDetails };
+
+      if (event.target.nodeName == "BUTTON") {
+        this.currentClick = "BUTTON"
+        clickedObject.button.push({ type: "BUTTON", tempTime: Date.now() - timeValue, dateFormat: new Date(), ...clickDetails })
+      } else if (event.target.nodeName == "INPUT") {
+        this.currentClick = "INPUT"
+        clickedObject.input.push({ type: "INPUT", tempTime: Date.now() - timeValue, dateFormat: new Date(), ...clickDetails })
+      }
+
+      else if (event.target.tagName == "A") {
+        if (event.target.getAttribute('href') == null) {
+          clickedObject.deadClick.push({ type: "deadClick", tempTime: Date.now() - timeValue, dateFormat: new Date(), ...clickDetails })
+        }
+        if (event.target.getAttribute('href') === '#') {
+          clickedObject.deadClick.push({ type: "deadClick", tempTime: Date.now() - timeValue, dateFormat: new Date(), ...clickDetails })
+        }
+        if (event.target.getAttribute('href') === '') {
+          clickedObject.deadClick.push({ type: "deadClick", tempTime: Date.now() - timeValue, dateFormat: new Date(), ...clickDetails })
+        }
+        if (!event.target.hasAttribute('href')) {
+          clickedObject.deadClick.push({ type: "deadClick", tempTime: Date.now() - timeValue, dateFormat: new Date(), ...clickDetails })
+        }
+        if (event.target.getAttribute('href')?.includes('http')) {
+          clickedObject.linkClick.push({ type: "A", tempTime: Date.now() - timeValue, dateFormat: new Date(), ...clickDetails })
+        }
+        else {
+          clickedObject.elementClick.push({ type: "A", tempTime: Date.now() - timeValue, dateFormat: new Date(), ...clickDetails })
+        }
+        this.currentClick = "A"
+      }
+      else if (event.target.nodeName == "FORM") {
+        //this.currentClick = "FORM"
+        // clickedObject.form.push({ type: "FORM", tempTime: Date.now() - timeValue, dateFormat: new Date(), ...clickDetails })
+      }
+
+      setTimeout(() => {
+        if (errorMessageObj?.clickError) {
+          clickedObject.errorClick.push({ type: "errorClick", tempTime: Date.now() - timeValue, dateFormat: new Date(), ...clickDetails, errorMessageObj })
+          errorMessageObj = {}
+        }
+      }, 2000);
+
+    }
+    , true);
+
+
+  window.navigation.addEventListener("navigate", function (event) {
+    let timeValue = sessionStorage.getItem("sessionStartTime")
+    let currentURL = event.destination.url;
+    // const clone = JSON.parse(JSON.stringify(clickedObject));
+    clickedObject.pageNavigation.push({ type: "TAB_CHANGE", tempTime: Date.now() - timeValue, url: currentURL, dateFormat: new Date() });
+  });
+
+  // window.addEventListener("visibilitychange", async () => {
+
+  //     if (document.visibilityState === "visible") {
+  //       let currentURL = window.location.href;
+  //       let timeValue = localStorage.getItem("sessionStartTime")
+  //       clickedObject.pageNavigation.push({ type: "TAB_CHANGE", tempTime: Date.now() - timeValue, url: currentURL, dateFormat: new Date() });
+  //     }
+
+  //   })
+
+  document.addEventListener(
+    "submit",
+    (event) => {
+      let timeValue = sessionStorage.getItem("sessionStartTime")
+      let currentURL = window.location.href;
+      clickedObject.formSubmit.push({ type: "FORM_SUBMIT", tempTime: Date.now() - timeValue, dateFormat: new Date(), url: currentURL })
+    }
+    , true);
+
+
+  let resizeTimeout;
+  const resizeInterval = 500; // Interval time in milliseconds
+
+  window.addEventListener('resize', function (event) {
+    // Clear the timeout if it has already been set
+    clearTimeout(resizeTimeout);
+
+    // Set a new timeout to capture the resize event after the specified interval
+    resizeTimeout = setTimeout(function () {
+      let timeValue = sessionStorage.getItem("sessionStartTime")
+      let currentURL = window.location.href;
+      clickedObject.windowResize.push({ type: "RESIZE", tempTime: Date.now() - timeValue, dateFormat: new Date(), url: currentURL });
+    }, resizeInterval);
+  });
+
+
+  // window.onerror = function (message, source, lineno, colno, error) {
+  //   console.log("dhyey ----------- ",message, source, lineno, colno, error);
+  //   errorMessage = { message: "errorClick : " + message, source, lineno, colno, error }
+  // };
+
 
   // add into session
-  // App.TraekAnalytics.prototype.sessionSet = function (key, value, expirationInMin = 30) {
-  //   let expirationDate = new Date(new Date().getTime() + 60000 * expirationInMin);
-  //   let newValue = {
-  //     value,
-  //     expirationDate: expirationDate.toISOString(),
-  //   };
-
-  //   this.sessionKey = value;
-  //   // // clear indexDB store on new Session create
-  //   clearStore();
-
-  //   this.recordSessions();
-
-  //   window.sessionStorage.setItem("isSnapshotCaptured", "false");
-  //   window.sessionStorage.setItem("SESSION_KEY", value);
-  //   window.sessionStorage.setItem(key, JSON.stringify(newValue));
-  // };
-
-  // App.TraekAnalytics.prototype.setCookie = function (key, value, expirationInMin = 30) {
-  //   let expirationDate = new Date(new Date().getTime() + 60000 * expirationInMin);
-
-  //   console.log(expirationDate, expirationInMin, "expirationDate")
-  //   let newValue = {
-  //     value,
-  //     expirationDate: expirationDate.toISOString(),
-  //   };
-
-  //   this.sessionKey = value;
-  //   // // clear indexDB store on new Session create
-  //   clearStore();
-
-  //   this.recordSessions();
-
-  //   // Set cookie instead of sessionStorage
-  //   let expires = expirationDate.toUTCString();
-  //   document.cookie = `${key}=${JSON.stringify(newValue)}; expires=${expires}; path=/`;
-
-  //   // Assuming you also want to set other sessionStorage items
-  //   window.sessionStorage.setItem("isSnapshotCaptured", "false");
-  //   window.sessionStorage.setItem("SESSION_KEY", value);
-  // };
-
-  // App.TraekAnalytics.prototype.setCookie = function (key, value, expirationInMin = 30) {
-  //   // Check if there's an existing cookie with the same key
-  //   let existingCookie = document.cookie
-  //     .split('; ')
-  //     .find(cookie => cookie.startsWith(`${key}=`));
-  //   console.log(existingCookie, "existingCookie");
-
-  //   // Parse the existing cookie value if it exists
-  //   let existingValue = existingCookie ? JSON.parse(existingCookie.split('=')[1]) : null;
-  //   console.log(existingValue, "existingValue")
-  //   // Check if the existing cookie is still valid
-  //   if (existingValue && new Date(existingValue.expirationDate) > new Date()) {
-  //     // Cookie is still valid, no need to set a new one
-  //     console.log('Existing cookie is still valid. Not setting a new one.');
-  //     return;
-  //   }
-
-  //   // Calculate the expiration date in milliseconds from the current time
-  //   let expirationDate = new Date(new Date().getTime() + 60000 * expirationInMin);
-
-  //   // Log information for debugging
-  //   console.log(expirationDate, expirationInMin, "expirationDate");
-
-  //   // Create a new value object with the provided value and calculated expiration date
-  //   let newValue = {
-  //     value,
-  //     expirationDate: expirationDate.toISOString(),
-  //   };
-
-  //   // Set the sessionKey property to the provided value
-  //   this.sessionKey = value;
-
-  //   // Clear the indexDB store on a new session create (assuming clearStore is defined elsewhere)
-  //   clearStore();
-
-  //   // Record sessions (assuming recordSessions is defined elsewhere)
-  //   this.recordSessions();
-
-  //   // Set the cookie with the calculated expiration date
-  //   let expires = expirationDate.toUTCString();
-  //   document.cookie = `${key}=${JSON.stringify(newValue)}; expires=${expires}; path=/`;
-
-  //   // Set other sessionStorage items
-  //   window.sessionStorage.setItem("isSnapshotCaptured", "false");
-  //   window.sessionStorage.setItem("SESSION_KEY", value);
-  // };
-
-
-  App.TraekAnalytics.prototype.sessionSet = function (key, value, expirationInMin = 1) {
-    console.log(key, "key")
-    // Check if there's an existing sessionStorage item with the same key
-    let existingValue = sessionStorage.getItem(key);
-    console.log(existingValue, "existingValue");
-
-    // Calculate the expiration date in milliseconds from the current time
+  App.TraekAnalytics.prototype.sessionSet = function (key, value, expirationInMin = 30) {
+    sessionStorage.getItem(key);
     let expirationDate = new Date(new Date().getTime() + 60000 * expirationInMin);
 
     // Log information for debugging
     console.log(expirationDate, expirationInMin, "expirationDate");
 
-    // Create a new value object with the provided value and calculated expiration date
     let newValue = {
       value,
       expirationDate: expirationDate.toISOString(),
     };
 
-    // Set the sessionKey property to the provided value
     this.sessionKey = value;
-
-    // Clear the indexDB store on a new session create (assuming clearStore is defined elsewhere)
+    // clear indexDB store on new Session create
     clearStore();
 
-    // Record sessions (assuming recordSessions is defined elsewhere)
     this.recordSessions();
 
-    // Set the sessionStorage item with the calculated expiration date
     sessionStorage.setItem(key, JSON.stringify(newValue));
-
-    // Set other sessionStorage items
     window.sessionStorage.setItem("isSnapshotCaptured", "false");
     window.sessionStorage.setItem("SESSION_KEY", value);
+    sessionStartTime = Date.now();
+    sessionStorage.setItem("sessionStartTime", sessionStartTime)
   };
 
 
+  // // Create a BroadcastChannel for communication
+  // const channel = new BroadcastChannel('tab_channel');
+
+  // // Function to update the tab count in localStorage
+  // function updateTabCount(action) {
+  //   let tabCount = parseInt(localStorage.getItem('tabCount')) || 0;
+  //   if (action === 'increment') {
+  //     tabCount++;
+  //   } else if (action === 'decrement') {
+  //     tabCount = Math.max(0, tabCount - 1);
+  //   }
+  //   localStorage.setItem('tabCount', tabCount);
+  //   return tabCount;
+  // }
+
+  // // Function to check if there are no tabs left and perform the action
+  // function checkTabsAndTakeAction() {
+  //   const tabCount = parseInt(localStorage.getItem('tabCount')) || 0;
+  //   if (tabCount === 0) {
+  //     localStorage.removeItem("SESSION_KEY_OBJ");
+  //     localStorage.removeItem("SESSION_KEY");
+  //     localStorage.removeItem("sessionStartTime")
+  //   }
+  // }
+
+  // // When a tab is loaded, increment the count and notify other tabs
+  // window.addEventListener('load', () => {
+  //   const tabCount = updateTabCount('increment');
+  //   channel.postMessage({ type: 'tabCount', tabCount: tabCount });
+  // });
+
+  // // When a tab is unloaded, decrement the count and notify other tabs
+  // window.addEventListener('beforeunload', () => {
+  //   const tabCount = updateTabCount('decrement');
+  //   channel.postMessage({ type: 'tabCount', tabCount: tabCount });
+  //   checkTabsAndTakeAction();
+  // });
+
+  // // Listen for messages from other tabs
+  // channel.onmessage = (event) => {
+  //   if (event.data.type === 'tabCount') {
+  //     checkTabsAndTakeAction();
+  //   }
+  // };
+
+  // // Initial check on page load
+  // document.addEventListener('DOMContentLoaded', checkTabsAndTakeAction);
 
   // get from session (if the value expired it is destroyed)
   App.TraekAnalytics.prototype.sessionGet = async function (key) {
@@ -237,7 +381,6 @@
     // if session key not found or session key expired generate new one
     const sessionKey = await this.generateKey();
     this.sessionSet("SESSION_KEY_OBJ", sessionKey);
-    // this.setCookie("SESSION_KEY_OBJ", sessionKey);
     return sessionKey;
   };
 
@@ -300,8 +443,7 @@
       var objectStore = transaction.objectStore(storeName);
       var objectStoreRequest = objectStore.add(obj);
       objectStoreRequest.onerror = logerr;
-      objectStoreRequest.onsuccess = function () {
-      };
+      objectStoreRequest.onsuccess = function () { };
     });
   }
 
@@ -311,15 +453,99 @@
       var objectStore = transaction.objectStore(storeName);
       var objectStoreRequest = objectStore.clear();
       objectStoreRequest.onerror = logerr;
-      objectStoreRequest.onsuccess = function () {
-      };
+      objectStoreRequest.onsuccess = function () { };
     });
   }
+  function getLastStoredEvent(objectStore, callback) {
+    var request = objectStore.openCursor(null, 'prev');
 
+    request.onsuccess = function (event) {
+      var cursor = event.target.result;
+      if (cursor) {
+        // Found the last stored event
+        callback(cursor.value);
+      }
+    };
+    request.onerror = function (event) {
+      console.error("Error fetching last stored event:", event.target.error);
+    };
+  }
+  let clickCounts = {};
+  let rageThreshold = 3;
+  function checkRageClick(event) {
+    const target = event.target || event.srcElement;
+    const elementKey = target.id || target.className;
+
+    if (!clickCounts[elementKey]) {
+      clickCounts[elementKey] = 1;
+    } else {
+      clickCounts[elementKey]++;
+    }
+
+
+    if (clickCounts[elementKey] > rageThreshold) {
+      // Reset the click count when the rageThreshold is reached
+      clickCounts[elementKey] = 0;
+      return true;
+    }
+
+    var now = Math.floor(Date.now());
+
+    if (
+      now - this.lastClick < 500 &&
+      now - this.secondLastClick &&
+      clickCounts[elementKey] >= rageThreshold
+    ) {
+      clickCounts = {}
+      return true;
+    }
+
+    this.secondLastClick = this.lastClick;
+    this.lastClick = now;
+
+    // No rage click detected for this element
+    return false;
+  }
+  function updateLastStoredEvent(objectStore, key, updatedEvent) {
+    var request = objectStore.put(updatedEvent, key);
+
+    request.onsuccess = function () {
+      // console.log("Event updated successfully");
+    };
+
+    request.onerror = function (event) {
+      console.error("Error updating event:", event.target.error);
+    };
+  }
+
+  document.addEventListener('click', (event) => {
+
+    const isRageClick = checkRageClick(event);
+
+    if (isRageClick) {
+      let timeValue = sessionStorage.getItem("sessionStartTime")
+      const clickedElement = event.target;
+      const elementType = clickedElement.tagName.toLowerCase();
+      const elementName = clickedElement.nodeName;
+      const elementClass = clickedElement.className;
+      const elementId = clickedElement.id;
+      const url = window.location.href;
+      const onClickDetails = clickedElement.onclick ? clickedElement.onclick.toString() : "No onclick attribute";
+      let clickDetails = { elementType, elementName, elementClass, elementId, url, onClickDetails };
+      // this.rageclickfind = true;
+      clickedObject.rageClick.push({ type: "rageClick", tempTime: Date.now() - timeValue, dateFormat: new Date(), ...clickDetails })
+    }
+  }, false);
+
+  let captureStartTime = null;
   App.TraekAnalytics.prototype.recordSessions = function () {
     if (typeof rrwebRecord !== "undefined") {
       rrwebRecord({
         emit(event) {
+          if (event.data.source == 2) {
+            event.element = this.currentClick;
+            currentEvent = event
+          }
           try {
             if (event) {
               add(event);
@@ -331,20 +557,6 @@
         recordCanvas: true,
         inlineStylesheet: true,
         maskAllInputs: true,
-        // recordCrossOriginIframes: true,
-        // inlineImages: true,
-        // sampling: {
-        // do not record mouse movement
-        // mousemove: false,
-        // do not record mouse interaction
-        // mouseInteraction: false,
-        // set the interval of scrolling event
-        // scroll: 150, // do not emit twice in 150ms
-        // set the interval of media interaction event
-        // media: 800,
-        // set the timing of record input
-        // input: "last", // When input mulitple characters, only record the final input
-        // },
         maskInputOptions: {
           password: true, // Mask some kinds of input
         },
@@ -352,10 +564,262 @@
     }
   };
 
+
+  function formatDuration(duration) {
+    // Convert milliseconds to seconds
+    const seconds = Math.floor(duration / 1000);
+    // Calculate minutes
+    const minutes = Math.floor(seconds / 60);
+    // Calculate remaining seconds
+    const remainingSeconds = seconds % 60;
+    // Return formatted duration
+    return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+  }
+
+  let captureStartTimeData = parseFloat(sessionStorage.getItem("captureStartTime"));
+
+  if (!isNaN(captureStartTimeData)) {
+    // If the value exists in sessionStorage, use it
+    captureStartTime = captureStartTimeData;
+  } else {
+    // If not found, initialize it with current time and store in sessionStorage
+    captureStartTime = performance.now();
+    sessionStorage.setItem("captureStartTime", captureStartTime.toString());
+  }
+
+  function captureDurationBasedOnEvent() {
+    let getperfomance = sessionStorage.getItem("perfomance")
+    let test = sessionStorage.getItem("ErrorPerformance")
+    let timing;
+    if (getperfomance) {
+      let oldTime, newTime, timeDifference;
+      if (sessionStorage.getItem('oldTime')) {
+        // If oldTime is already stored, retrieve its value
+        oldTime = parseFloat(sessionStorage.getItem('newTime'));
+        newTime = performance.now();
+
+        // Check if newTime is less than oldTime, then set it to 0
+        if (newTime < oldTime) {
+          newTime = 0;
+          oldTime = 0;
+        }
+      } else {
+        // If oldTime is not stored yet, initialize it to 0 and set newTime to performance.now()
+        oldTime = 0;
+        newTime = performance.now();
+      }
+      // Update oldTime and newTime in sessionStorage
+      sessionStorage.setItem('oldTime', oldTime);
+      sessionStorage.setItem('newTime', newTime);
+
+      // Calculate the time difference
+      timeDifference = Math.abs(newTime - oldTime);
+
+      // Calculate timing by adding test and timeDifference
+      timing = parseFloat(test) + timeDifference;
+
+      // Store timing in sessionStorage
+      sessionStorage.setItem("ErrorPerformance", timing.toString());
+
+    }
+
+    else {
+      timing = performance.now()
+    }
+    let duration;
+    if (test > timing) {
+      sessionStorage.setItem("perfomance", true)
+      duration = test - captureStartTime;
+      sessionStorage.setItem("ErrorPerformance", test.toString())
+    } else {
+      duration = timing - captureStartTime;
+      sessionStorage.setItem("ErrorPerformance", timing.toString())
+    }
+    // Calculate the duration since event capturing started
+    const formattedDuration = formatDuration(duration);
+    return formattedDuration;
+  }
+
+  function addConsoleMessage(type, args, stack, formattedDuration) {
+    if (args.join(' ') === "Script error.") {
+      return;
+    }
+
+    errorMessageObj = {
+      level: type,
+      clickError: true,
+      payload: [
+        args.join(' ')
+      ],
+      stackTrace: stack,
+      duration: formattedDuration // Include duration in the payload
+    }
+
+    // Push console messages into capturedConsole with additional details
+    add({
+      type: 6,
+      data: {
+        plugin: "rrweb/console@1",
+        payload: {
+          level: type,
+          payload: [
+            args.join(' ')
+          ],
+          stackTrace: stack,
+          duration: formattedDuration // Include duration in the payload
+        }
+      },
+      timestamp: Date.now(),
+    });
+  }
+
+
+  for (const methodName in console) {
+    if (typeof console[methodName] === 'function' && methodName === "error") {
+      const originalMethod = console[methodName];
+
+      console[methodName] = function (...args) {
+        // Capture the stack trace
+        const error = new Error();
+        const stack = error.stack;
+        let getperfomance = sessionStorage.getItem("perfomance")
+        let test = sessionStorage.getItem("ErrorPerformance")
+        let timing;
+        if (getperfomance) {
+          let oldTime, newTime, timeDifference;
+          if (sessionStorage.getItem('oldTime')) {
+            // If oldTime is already stored, retrieve its value
+            oldTime = parseFloat(sessionStorage.getItem('newTime'));
+            newTime = performance.now();
+
+            // Check if newTime is less than oldTime, then set it to 0
+            if (newTime < oldTime) {
+              newTime = 0;
+              oldTime = 0;
+            }
+          } else {
+            // If oldTime is not stored yet, initialize it to 0 and set newTime to performance.now()
+            oldTime = 0;
+            newTime = performance.now();
+          }
+          // Update oldTime and newTime in sessionStorage
+          sessionStorage.setItem('oldTime', oldTime);
+          sessionStorage.setItem('newTime', newTime);
+
+          // Calculate the time difference
+          timeDifference = Math.abs(newTime - oldTime);
+
+          // Calculate timing by adding test and timeDifference
+          timing = parseFloat(test) + timeDifference;
+
+          // Store timing in sessionStorage
+          sessionStorage.setItem("ErrorPerformance", timing.toString());
+
+        }
+
+        else {
+          timing = performance.now()
+        }
+        let duration;
+        if (test > timing) {
+          sessionStorage.setItem("perfomance", true)
+          duration = test - captureStartTime;
+          sessionStorage.setItem("ErrorPerformance", test.toString())
+        } else {
+          duration = timing - captureStartTime;
+          sessionStorage.setItem("ErrorPerformance", timing.toString())
+        }
+        // Calculate the duration since event capturing started
+        const formattedDuration = formatDuration(duration);
+
+
+        // Push console messages into capturedConsole with additional details
+        addConsoleMessage(methodName, args, stack, formattedDuration)
+        // Call the original console method
+        originalMethod.apply(console, args);
+      };
+    }
+  }
+
+  // Function to capture network errors
+  function captureNetworkErrors() {
+    // Intercept fetch requests
+    const originalFetch = window.fetch;
+    window.fetch = function (url, options) {
+      const method = options && options.method ? options.method : 'GET'; // Default to GET if method is not provided
+      return originalFetch(url, options).then(response => {
+        if (!response.ok) {
+          const error = new Error(`${method}: ${response.url} ${response.status}(${response.statusText})`);
+          throw error;
+        }
+        return response;
+      }).catch(error => {
+        throw error.message;
+      });
+    };
+  }
+
+  // Call the function to start capturing network errors
+  captureNetworkErrors();
+
+
+  window.onerror = function (message, source, lineno, colno, error) {
+    const stack = error ? error.stack : null;
+    let getperfomance = sessionStorage.getItem("perfomance")
+    let test = sessionStorage.getItem("ErrorPerformance")
+    let timing;
+    if (getperfomance) {
+      let oldTime, newTime, timeDifference;
+      if (sessionStorage.getItem('oldTime')) {
+        // If oldTime is already stored, retrieve its value
+        oldTime = parseFloat(sessionStorage.getItem('newTime'));
+        newTime = performance.now();
+
+        // Check if newTime is less than oldTime, then set it to 0
+        if (newTime < oldTime) {
+          newTime = 0;
+          oldTime = 0;
+        }
+      } else {
+        // If oldTime is not stored yet, initialize it to 0 and set newTime to performance.now()
+        oldTime = 0;
+        newTime = performance.now();
+      }
+      // Update oldTime and newTime in sessionStorage
+      sessionStorage.setItem('oldTime', oldTime);
+      sessionStorage.setItem('newTime', newTime);
+
+      // Calculate the time difference
+      timeDifference = Math.abs(newTime - oldTime);
+
+      // Calculate timing by adding test and timeDifference
+      timing = parseFloat(test) + timeDifference;
+
+      // Store timing in sessionStorage
+      sessionStorage.setItem("ErrorPerformance", timing.toString());
+
+    }
+
+    else {
+      timing = performance.now()
+    }
+    let duration;
+    if (test > timing) {
+      sessionStorage.setItem("perfomance", true)
+      duration = test - captureStartTime;
+      sessionStorage.setItem("ErrorPerformance", test.toString())
+    } else {
+      duration = timing - captureStartTime;
+      sessionStorage.setItem("ErrorPerformance", timing.toString())
+    }
+    const formattedDuration = formatDuration(duration);
+    addConsoleMessage("error", [message], stack, formattedDuration); // Duration is set to 0 for JavaScript errors
+  };
+
   App.TraekAnalytics.prototype.saveSessionRecording = async function (isFormSession = false) {
     await this.sessionGet("SESSION_KEY_OBJ");
 
-    const { propertyId, userKey, sessionKey, hostUrl, ip, userAgent, pageUrl, pageTitle, referrer } = this;
+    const { propertyId, userKey, sessionKey, hostUrl, ip, userAgent, pageUrl, pageTitle, referrer, screenResolution } = this;
 
     //get data
 
@@ -363,6 +827,9 @@
       const isExistsSnapshotSession = window.sessionStorage.getItem("isSnapshotCaptured") === "true";
 
       const isExistsSnapshotObject = events.findIndex(({ type }) => type === 4);
+      let customAttribute = sessionStorage.getItem("ryData")
+      customAttribute = JSON.parse(customAttribute)
+      const attributeAll = customAttribute ? customAttribute : []
 
       if (isExistsSnapshotSession || isExistsSnapshotObject >= 0) {
         if (events?.length > 0) {
@@ -374,21 +841,37 @@
             sessionKey,
             ip,
             userAgent,
+            screenResolution,
             pageUrl,
             page: pageTitle,
             isFormSession,
             referrer,
+            clickedObject,
+            attributeAll,
+          };
+
+          clickedObject = {
+            input: [],
+            button: [],
+            elementClick: [],
+            formSubmit: [],
+            windowResize: [],
+            deadClick: [],
+            linkClick: [],
+            errorClick: [],
+            pageNavigation: [],
+            rageClick: []
           };
 
           const requestOptions = {
             method: "POST",
             body: JSON.stringify(payload),
           };
-
-          fetch(url, requestOptions);
+          await fetch(url, requestOptions);
           clearStore();
 
           window.sessionStorage.setItem("isSnapshotCaptured", "true");
+          ry('clear');
         }
       } else {
         window.sessionStorage.setItem("isSnapshotCaptured", "false");
@@ -597,12 +1080,10 @@
   }
 
   App.TraekAnalytics.prototype.callFeedsApi = async function () {
-
     var myHeaders = new Headers();
     myHeaders.append("Content-Type", "application/json");
 
     const sessionKey = await this.sessionGet("SESSION_KEY_OBJ");
-
 
     const payload = {
       propertyId: this.propertyId,
@@ -620,44 +1101,74 @@
       body: JSON.stringify(payload),
     };
 
-    const hostUrl = isLive ? this.hostUrl : "http://localhost:3333";
+    const hostUrl = "http://localhost:3333";
 
     fetch(hostUrl + "/api/leads/feeds", requestOptions).catch((error) => console.error("callFeedsApi error", error));
   };
+
+  let timeOfPreviousVisit = sessionStorage.getItem("timeOfPreviousVisit") ? sessionStorage.getItem("timeOfPreviousVisit") : 0;
+  sessionStorage.setItem("timeOfPreviousVisit", timeOfPreviousVisit)
 
   // add leads / visitor logs to table on tab change/close, page change
   App.TraekAnalytics.prototype.callTrackingApi = async function () {
 
     const sessionKey = await this.sessionGet("SESSION_KEY_OBJ");
+    let temptimeOfPreviousVisit = sessionStorage.getItem("timeOfPreviousVisit")
+
     try {
       const hostUrl = this.hostUrl + "/api/trackdata";
+      let time = Date.now();
+
+      let pageUrlTemp = this.pageUrl
+      if (pageUrlTemp.endsWith('/')) {
+        pageUrlTemp = pageUrlTemp.slice(0, -1);
+      }
+
       const payload = {
         propertyId: this.propertyId,
-        time: new Date() - this.visitedTime,
+        time: time,
         pageTitle: this.pageTitle,
-        pageUrl: this.pageUrl,
+        pageUrl: pageUrlTemp,
         referrer: this.referrer,
         sessionKey,
+        timeOfPreviousVisit: temptimeOfPreviousVisit,
+        duration: time - temptimeOfPreviousVisit,
         ip: this.ip,
         userKey: this.userKey,
         userAgent: this.userAgent,
+        screenResolution: this.screenResolution,
       };
 
+      sessionStorage.setItem("timeOfPreviousVisit", time)
 
-      if (this.callApi) {
-        if (this.type !== "isp") {
-          navigator.sendBeacon(hostUrl, JSON.stringify(payload));
-        }
-      }
+      // if (this.callApi) {
+      //   if (this.type !== "isp") {
+      //     // Set isVisitor to true in the payload
+      //     const modifiedPayload = { ...payload, isVisitor: true };
 
-      // navigator.sendBeacon(hostUrl, JSON.stringify({ ...payload, isVisitor: true }));
+      //     // Convert the modified payload to a Blob
+      //     const blob = new Blob([JSON.stringify(modifiedPayload)], {
+      //       type: "application/json",
+      //     });
 
-      fetch(hostUrl, {
+      //     // Use navigator.sendBeacon with the Blob
+      //     const success = navigator.sendBeacon(hostUrl, blob);
+
+      //     if (success) {
+      //       console.log(
+      //         "sendBeacon successfully queued the data for transfer."
+      //       );
+      //     } else {
+      //       console.log("sendBeacon could not queue the data for transfer.");
+      //     }
+      //   }
+      // }
+
+      await fetch(hostUrl, {
         method: "POST",
         body: JSON.stringify({ ...payload, isVisitor: true }),
       })
-        .then((resp) => {
-        })
+        .then((resp) => { })
         .catch((err) => {
           console.log("isVisitor err => ", err);
         });
@@ -703,6 +1214,7 @@
             page: data.pageTitle,
             pageUrl: data.pageUrl,
             userAgent: data.userAgent,
+            screenResolution: data.screenResolution,
           };
           let checkEmpty = [];
           for (const element of form) {
@@ -776,7 +1288,7 @@
           }
 
           if (checkEmpty.some((data) => data === true)) {
-            navigator.sendBeacon(data.hostUrl + "/api/track/forms", JSON.stringify(formData));
+            navigator.sendBeacon("https://uat-app.traek.io" + "/api/track/forms", JSON.stringify(formData));
           }
 
           cb(true);
@@ -786,7 +1298,7 @@
         forms.forEach((form) => {
           form.onsubmit = function (e) {
             formSubmitted(e, form, _this, () => {
-              uploadVisitorRecords(_this.hostUrl);
+              // uploadVisitorRecords(_this.hostUrl);
               _this.saveSessionRecording(true);
             });
           };
@@ -797,8 +1309,9 @@
     }
   };
 
-  App.TraekAnalytics.prototype.trackUserData = async function () {
+  let tractDataCall = 0;
 
+  App.TraekAnalytics.prototype.trackUserData = async function () {
     // const eventStateObj = JSON.parse(localStorage.getItem("eventState")) || null;
     window.sessionStorage.setItem("isSnapshotCaptured", "false");
 
@@ -807,7 +1320,6 @@
     } else {
       console.log("7 trackUserData this.userAgent else success=> ", this.userAgent);
     }
-
 
     if (!this.userKey) {
       try {
@@ -819,19 +1331,16 @@
       }
     }
 
-
     if (!this.sessionKey) {
       try {
         let sessionKey = await this.generateKey();
         sessionStorage.setItem("SESSION_KEY", sessionKey);
         this.sessionSet("SESSION_KEY_OBJ", sessionKey);
-        // this.setCookie("SESSION_KEY_OBJ", sessionKey)
         this.sessionKey = sessionKey;
       } catch (error) {
         console.log("141 trackUserData generateKey sessionKey error => ", error);
       }
     }
-
 
     if (!this.ip) {
       try {
@@ -843,7 +1352,6 @@
         console.log("171 trackUserData generateKey ip error => ", error);
       }
     }
-
 
     this.isLoading = true;
 
@@ -863,14 +1371,12 @@
 
           response = JSON.stringify(await response.json());
 
-
           sessionStorage.setItem("propertyData", response);
           propertyData = response;
         } catch (error) {
           console.log("222 trackUserData propertyData error => ", error);
         }
       }
-
 
       const {
         realtime,
@@ -898,28 +1404,36 @@
       });
 
       if (this.heatmaps?.length > 0) {
-
         this.allowHeatmaps = true;
         this.captureHeatmaps();
       }
 
-
       const url = window.location !== window.parent.location ? document.referrer : document.location.href;
-
 
       if (url !== "https://app.traek.io/") {
         this.getElementsData();
       }
       if (property_id) {
         if (verified) {
-
+          // try {
+          //   const response = await fetch(`${this.hostUrl}/api/subscription?propertyId=${property_id}`);
+          //   if (!response.ok) {
+          //     throw new Error(`HTTP error! Status: ${response.status}`);
+          //   }
+          //   const subscriptionResponse = await response.json();
+          //   if (subscriptionResponse.status === "trial_ended" || subscriptionResponse.status === "cancelled") {
+          //     return;
+          //   }
+          // } catch (error) {
+          //   console.error('Error fetching subscription data:', error.message);
+          // }
           // this.allowLeads = shouldAllowLead;
           // this.allowSession = shouldAllowSession;
           this.callFeedsApi();
           setInterval(() => {
             this.trackForms();
           }, 3000);
-          this.callTrackingApi();
+          // this.callTrackingApi();
 
           // load rrweb script if session storage allowed
           if (sessionRecording) {
@@ -927,66 +1441,88 @@
             traekRRWebScript.src = "https://cdn.jsdelivr.net/npm/rrweb@latest/dist/record/rrweb-record.min.js";
 
             traekRRWebScript.onload = async () => {
-
               if (this.allowSessionRecord) {
                 await this.recordSessions();
                 this.callTrackingApi();
 
-                setInterval(() => {
-                  this.saveSessionRecording();
+                setInterval(async () => {
+                  await this.saveSessionRecording();
                 }, SAVE_RECORDING_INTERVAL_TIME);
               }
             };
             document.head.appendChild(traekRRWebScript);
           }
 
-
-          if (realtime) {
-            App.TraekAnalytics.currentObject = this;
-            let realtimeSctipt = document.createElement("script");
-            realtimeSctipt.src = this.cdnUrl + "/realtime-uat.js";
-            realtimeSctipt.type = "text/javascript";
-            document.head.appendChild(realtimeSctipt);
-          }
-
+          App.TraekAnalytics.currentObject = this;
+          let realtimeSctipt = document.createElement("script");
+          realtimeSctipt.src = this.cdnUrl + "/riyo-realtime-uat.js";
+          realtimeSctipt.type = "text/javascript";
+          document.head.appendChild(realtimeSctipt);
 
           const sessionKey = await this.sessionGet("SESSION_KEY_OBJ");
 
-
           if (this.propertyId && this.userKey && sessionKey && this.ip) {
-
-            window.addEventListener("visibilitychange", () => {
-
+            window.addEventListener("visibilitychange", async () => {
               if (document.visibilityState === "visible") {
                 this.visitedTime = new Date();
               } else {
-                this.callTrackingApi();
+                // await this.callTrackingApi();
               }
               if (document.visibilityState === "hidden") {
-                this.saveSessionRecording();
+                await this.saveSessionRecording();
                 this.allowSessionRecord = false;
               } else {
                 this.allowSessionRecord = true;
               }
             });
 
-            window.addEventListener("beforeunload", () => {
-              this.saveHeatmap();
+            // window.addEventListener("beforeunload", async(event) => {
+            //   event.preventDefault(); 
+            //   const date1 = new Date(this.visitedTime);
+            //   const date2 = new Date();
+            //   const differenceInMilliseconds = Math.abs(date2 - date1);
+            //   const differenceInSeconds = differenceInMilliseconds / 1000;
+            //   this.duration = differenceInSeconds;
+            //   console.log("this.duration in unload:", this.duration);
+            //   this.saveHeatmap();
+            //   await this.callTrackingApi();
+            //   this.callApi = false;
+            //   await this.saveSessionRecording();
+            // }); 
+
+            // Add the beforeunload event listener to call saveSessionRecording when the page is about to be closed
+
+            // window.addEventListener("beforeunload", async (event) => {
+            //   await this.callTrackingApi();
+            // });
+
+
+            const beforeUnloadHandler = async (event) => {
               this.callTrackingApi();
-              this.callApi = false;
-              this.saveSessionRecording();
-            });
+              const date1 = new Date(this.visitedTime);
+              const date2 = new Date();
+              const differenceInMilliseconds = Math.abs(date2 - date1);
+              const differenceInSeconds = differenceInMilliseconds / 1000;
+              this.duration = differenceInSeconds;
+              this.saveHeatmap();
+
+              window.removeEventListener("beforeunload", beforeUnloadHandler);
+              await this.saveSessionRecording();
+            };
+
+            window.addEventListener("beforeunload", beforeUnloadHandler);
 
             const observer = new MutationObserver(() => {
-
               let pageTitle = document.title;
-
-
 
               const currentUrl = document.URL.replace(/\/$/, "");
 
               if (this.pageUrl !== currentUrl && this.pageTitle !== pageTitle) {
-
+                const date1 = new Date(this.visitedTime);
+                const date2 = new Date();
+                const differenceInMilliseconds = Math.abs(date2 - date1);
+                const differenceInSeconds = differenceInMilliseconds / 1000;
+                this.duration = differenceInSeconds;
                 this.pageUrl = currentUrl;
                 this.pageTitle = pageTitle;
                 this.visitedTime = new Date();
@@ -1000,7 +1536,6 @@
                 }, 2000);
               }
             });
-
 
             const config = { subtree: true, childList: true };
             observer.observe(document, config);
@@ -1041,7 +1576,7 @@
 
       App.TraekAnalytics.currentObject = this;
       let elementsScript = document.createElement("script");
-      elementsScript.src = this.cdnUrl + "/elements-uat.js";
+      elementsScript.src = this.cdnUrl + "/riyo-elements-uat.js";
       elementsScript.type = "text/javascript";
       document.head.appendChild(elementsScript);
     } catch (error) {
