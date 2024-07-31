@@ -242,12 +242,12 @@
     , true);
 
 
-  window.navigation.addEventListener("navigate", function (event) {
-    let timeValue = sessionStorage.getItem("sessionStartTime")
-    let currentURL = event.destination.url;
-    // const clone = JSON.parse(JSON.stringify(clickedObject));
-    clickedObject.pageNavigation.push({ type: "TAB_CHANGE", tempTime: Date.now() - timeValue, url: currentURL, dateFormat: new Date() });
-  });
+  // window.navigation.addEventListener("navigate", function (event) {
+  //   let timeValue = sessionStorage.getItem("sessionStartTime")
+  //   let currentURL = event.destination.url;
+  //   // const clone = JSON.parse(JSON.stringify(clickedObject));
+  //   clickedObject.pageNavigation.push({ type: "TAB_CHANGE", tempTime: Date.now() - timeValue, url: currentURL, dateFormat: new Date() });
+  // });
 
   // window.addEventListener("visibilitychange", async () => {
 
